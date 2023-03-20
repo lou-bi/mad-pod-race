@@ -9,15 +9,15 @@ type Vec2 struct {
 	x, y int
 }
 
-
 type Checkpoint = Vec2
-type Pod struct {
-	pos Vec2
-	vel Vec2
-	acc Vec2
-	lastPos Vec2
-	lastVel Vec2
-}
+
+//	type Pod struct {
+//		pos Vec2
+//		vel Vec2
+//		acc Vec2
+//		lastPos Vec2
+//		lastVel Vec2
+//	}
 func updateMyPod(x, y int) {
 	myPod.lastPos = myPod.pos
 	myPod.lastVel = myPod.vel
@@ -33,22 +33,20 @@ func updateMyPod(x, y int) {
 	}
 }
 
-var myPod = Pod{
-
-}
+var myPod = Pod{}
 
 var (
 	boostConsumed bool
 
-	Checkpoints []Checkpoint 
-	target Checkpoint
+	Checkpoints        []Checkpoint
+	target             Checkpoint
 	allCheckpointsSeen bool
-	
 )
-///////////////////////////////////////////////
-///////////////////////////////////////////////
+
+// /////////////////////////////////////////////
+// /////////////////////////////////////////////
 func main() {
-    for {
+	for {
 
 		var thurst int
 		// var boost bool
@@ -71,7 +69,6 @@ func main() {
 		// 	boostConsumed = true
 		// }
 
-
 		// thurst = 100 - norm(nextCheckpointAngle) * 3
 
 		// if thurst < 0 {
@@ -84,7 +81,6 @@ func main() {
 		// fmt.Fprintf(os.Stderr, "next: %d ; t: %d\n", nextCheckpointAngle, thurst)
 		// fmt.Fprintf(os.Stderr, "bc: %t | b: %t | t: %d | next: %d", boostConsumed, boost, thurst, nextCheckpointDist)
 
-
 		if nextCheckpointDist < 1500 && allCheckpointsSeen {
 			target = getNextTarget(nextCheckpointX, nextCheckpointY)
 		} else {
@@ -92,11 +88,9 @@ func main() {
 		}
 		thurst = 100
 
-		
 		if nextCheckpointDist < 1000 {
 			thurst = 0
 		}
-
 
 		if nextCheckpointAngle > 5 {
 
@@ -108,10 +102,11 @@ func main() {
 		} else {
 			fmt.Printf("%d %d %d\n", target.x, target.y, thurst)
 		}
-    }
+	}
 }
-///////////////////////////////////////////////
-///////////////////////////////////////////////
+
+// /////////////////////////////////////////////
+// /////////////////////////////////////////////
 func norm(a int) int {
 	n := abs(a)
 	f := float64(n) / 180
@@ -119,13 +114,14 @@ func norm(a int) int {
 	return int(s)
 }
 
-func abs (x int) int {
+func abs(x int) int {
 	if x < 0 {
 		return -x
 	}
 	return x
 }
-///////////////////////////////////////////////
+
+// /////////////////////////////////////////////
 func has(s []Checkpoint, x Checkpoint) (int, bool) {
 	for i, e := range s {
 		if e == x {
@@ -142,7 +138,7 @@ func addCheckpoint(x, y int) {
 	}
 }
 
-func updateAllCheckpointseen (cCheckpoint Checkpoint) {
+func updateAllCheckpointseen(cCheckpoint Checkpoint) {
 	if len(Checkpoints) > 1 && cCheckpoint == Checkpoints[0] {
 		allCheckpointsSeen = true
 	}
@@ -150,8 +146,8 @@ func updateAllCheckpointseen (cCheckpoint Checkpoint) {
 
 func getNextTarget(x, y int) Checkpoint {
 	ci, _ := has(Checkpoints, Checkpoint{x, y})
-	if ci == len(Checkpoints) - 1 {
+	if ci == len(Checkpoints)-1 {
 		return Checkpoints[0]
 	}
-	return Checkpoints[ci + 1]
+	return Checkpoints[ci+1]
 }
