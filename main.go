@@ -2,152 +2,200 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"math"
 )
 
-type Vec2 struct {
-	x, y int
-}
+type Vec2 struct{ x, y int }
 
-type Checkpoint = Vec2
+var cpm = CheckpointManager{}
+var a = 1
+var boostConsumed bool
 
-//	type Pod struct {
-//		pos Vec2
-//		vel Vec2
-//		acc Vec2
-//		lastPos Vec2
-//		lastVel Vec2
-//	}
-func updateMyPod(x, y int) {
-	myPod.lastPos = myPod.pos
-	myPod.lastVel = myPod.vel
+var firstShot bool
 
-	myPod.pos = Vec2{x, y}
-	myPod.vel = Vec2{
-		x: x - myPod.lastPos.x,
-		y: y - myPod.lastPos.y,
-	}
-	myPod.acc = Vec2{
-		x: myPod.vel.x - myPod.lastVel.x,
-		y: myPod.vel.y - myPod.lastVel.y,
-	}
-}
-
-var myPod = Pod{}
-
-var (
-	boostConsumed bool
-
-	Checkpoints        []Checkpoint
-	target             Checkpoint
-	allCheckpointsSeen bool
-)
-
-// /////////////////////////////////////////////
-// /////////////////////////////////////////////
 func main() {
 	for {
-
-		var thurst int
-		// var boost bool
 
 		var x, y, nextCheckpointX, nextCheckpointY, nextCheckpointDist, nextCheckpointAngle int
 		fmt.Scan(&x, &y, &nextCheckpointX, &nextCheckpointY, &nextCheckpointDist, &nextCheckpointAngle)
 		var opponentX, opponentY int
 		fmt.Scan(&opponentX, &opponentY)
 
-		updateMyPod(x, y)
+		ccp := Vec2{nextCheckpointX, nextCheckpointY}
 
-		updateAllCheckpointseen(Checkpoint{nextCheckpointX, nextCheckpointY})
+		cpm.add(ccp)
+		cpm.updateCPId(ccp)
+		cpm.lap(ccp)
+		cpm.updateAllCPSeen(ccp)
 
-		if !allCheckpointsSeen {
-			addCheckpoint(nextCheckpointX, nextCheckpointY)
-		}
+		absNCPA := math.Abs(float64(nextCheckpointAngle))
 
-		// if !boostConsumed && nextCheckpointDist > 4000 && nextCheckpointAngle < 25 {
-		// 	boost = true
-		// 	boostConsumed = true
-		// }
+		thrust := 100
 
-		// thurst = 100 - norm(nextCheckpointAngle) * 3
+		// if !cpm.allCPSeen {
 
-		// if thurst < 0 {
-		// 	thurst = 50
-		// }
-
-		fmt.Fprintf(os.Stderr, "Checkpoints: %v\n", Checkpoints)
-		fmt.Fprintf(os.Stderr, "allseen: %t\n", allCheckpointsSeen)
-		fmt.Fprintf(os.Stderr, "myPod: %v", myPod)
-		// fmt.Fprintf(os.Stderr, "next: %d ; t: %d\n", nextCheckpointAngle, thurst)
-		// fmt.Fprintf(os.Stderr, "bc: %t | b: %t | t: %d | next: %d", boostConsumed, boost, thurst, nextCheckpointDist)
-
-		if nextCheckpointDist < 1500 && allCheckpointsSeen {
-			target = getNextTarget(nextCheckpointX, nextCheckpointY)
+		if nextCheckpointAngle < a && nextCheckpointAngle > -a {
+			thrust = 100
 		} else {
-			target = Checkpoint{nextCheckpointX, nextCheckpointY}
-		}
-		thurst = 100
+			a := (1.0 - (absNCPA / 90.0))
+			b := (float64(nextCheckpointDist) / (2.0 * 600.0))
 
-		if nextCheckpointDist < 1000 {
-			thurst = 0
-		}
+			if a < 0 {
+				a = 0.0
+			}
 
-		if nextCheckpointAngle > 5 {
-
+			thrust = int(100.0 * a * b)
 		}
 
-		if !boostConsumed {
-			fmt.Printf("%d %d BOOST\n", target.x, target.y)
+		if thrust > 100 {
+			thrust = 100
+		}
+
+		var target Vec2
+
+		if cpm.allCPSeen {
+			target = cpm.bcps[cpm.currentCPId]
+		} else {
+			target = cpm.computeInitialBestTraj(ccp)
+		}
+
+		if int(absNCPA) < a && nextCheckpointDist > 6000 {
+			fmt.Println(target.x, target.y, "BOOST")
 			boostConsumed = true
 		} else {
-			fmt.Printf("%d %d %d\n", target.x, target.y, thurst)
+			fmt.Println(target.x, target.y, thrust)
 		}
 	}
 }
 
-// /////////////////////////////////////////////
-// /////////////////////////////////////////////
-func norm(a int) int {
-	n := abs(a)
-	f := float64(n) / 180
-	s := f * 99
-	return int(s)
+type CheckpointManager struct {
+	cps         []Vec2
+	bcps        []Vec2
+	currentLap  int
+	currentCPId int
+	bestBoost   Vec2
+	allCPSeen   bool
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-// /////////////////////////////////////////////
-func has(s []Checkpoint, x Checkpoint) (int, bool) {
-	for i, e := range s {
-		if e == x {
-			return i, true
+func (cpm *CheckpointManager) has(cp Vec2) bool {
+	for _, c := range cpm.cps {
+		if c == cp {
+			return true
 		}
 	}
-	return -1, false
+	return false
 }
-func addCheckpoint(x, y int) {
-	c := Checkpoint{x, y}
 
-	if _, b := has(Checkpoints, Checkpoint{x, y}); !b {
-		Checkpoints = append(Checkpoints, c)
+func (cpm *CheckpointManager) add(cp Vec2) {
+	if !cpm.has(cp) {
+		cpm.cps = append(cpm.cps, cp)
 	}
 }
 
-func updateAllCheckpointseen(cCheckpoint Checkpoint) {
-	if len(Checkpoints) > 1 && cCheckpoint == Checkpoints[0] {
-		allCheckpointsSeen = true
+func (cpm *CheckpointManager) updateCPId(cp Vec2) {
+	for i, c := range cpm.cps {
+		if c == cp {
+			cpm.currentCPId = i
+		}
 	}
 }
 
-func getNextTarget(x, y int) Checkpoint {
-	ci, _ := has(Checkpoints, Checkpoint{x, y})
-	if ci == len(Checkpoints)-1 {
-		return Checkpoints[0]
+func (cpm *CheckpointManager) lap(cp Vec2) {
+	if cpm.currentCPId != 0 && cp == cpm.cps[0] {
+		cpm.currentLap++
+		cpm.currentCPId = 0
 	}
-	return Checkpoints[ci+1]
+}
+
+func (cpm *CheckpointManager) updateAllCPSeen(cp Vec2) {
+	if cpm.allCPSeen == false && len(cpm.cps) > 1 && cpm.cps[0] == cp {
+		cpm.allCPSeen = true
+		cpm.computeBestBoost()
+		cpm.computeBestTraj()
+	}
+}
+
+func (cpm *CheckpointManager) computeBestBoost() {
+	longest := 0
+	var best Vec2
+	for i := 0; i < len(cpm.cps)-1; i++ {
+		a := cpm.cps[i]
+		b := cpm.cps[i+1]
+		dx := (a.x - b.x) * (a.x - b.x)
+		dy := (a.y - b.y) * (a.y - b.y)
+		d := dx + dy
+
+		if d > longest {
+			longest = d
+			best = cpm.cps[i+1]
+		}
+	}
+	cpm.bestBoost = best
+}
+func (cpm *CheckpointManager) computeBestTraj() {
+	checkpointRadius := 400.0
+	for i, cp := range cpm.cps {
+		var previous int
+		var next int
+
+		if i == 0 {
+			previous = len(cpm.cps) - 1
+			next = i + 1
+		} else if i == len(cpm.cps)-1 {
+			previous = i - 1
+			next = 0
+		} else {
+			previous = i - 1
+			next = i + 1
+		}
+		a := cpm.cps[previous]
+		b := cpm.cps[next]
+
+		ab := Vec2{x: b.x - a.x, y: b.y - a.y}
+		ap := Vec2{x: cp.x - a.x, y: cp.y - a.y}
+		orientation := ab.x*ap.y - ab.y*ap.x
+
+		var midx float64
+		var midy float64
+
+		if orientation < 0 {
+			midx = float64(a.y-b.y) / 2
+			midy = float64(b.x-a.x) / 2
+		} else {
+			midx = float64(b.y-a.y) / 2
+			midy = float64(a.x-b.x) / 2
+		}
+
+		norm := math.Sqrt(math.Pow(midx, 2) + math.Pow(midy, 2))
+		normalized := []float64{midx / norm, midy / norm}
+
+		scale := []float64{normalized[0] * checkpointRadius, normalized[1] * checkpointRadius}
+
+		bestPoint := Vec2{
+			x: int(float64(cp.x) + scale[0]),
+			y: int(float64(cp.y) + scale[1]),
+		}
+
+		cpm.bcps = append(cpm.bcps, bestPoint)
+	}
+}
+func (cpm *CheckpointManager) computeInitialBestTraj(cp Vec2) Vec2 {
+	checkpointRadius := 600.0
+
+	midx := 8000.0
+	midy := 4500.0
+
+	dx := float64(cp.x) - midx
+	dy := float64(cp.y) - midy
+
+	magnitude := math.Sqrt(dx*dx + dy*dy)
+	if magnitude > 0 {
+		dx /= magnitude
+		dy /= magnitude
+	}
+
+	return Vec2{
+		x: int(midx + dx*(magnitude-checkpointRadius)),
+		y: int(midy + dy*(magnitude-checkpointRadius)),
+	}
 }
